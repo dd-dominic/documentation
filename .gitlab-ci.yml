@@ -12,7 +12,7 @@ variables:
   LIVE_DOMAIN: "https://docs.datadoghq.com/"
   PREVIEW_DOMAIN: "https://docs-staging.datadoghq.com/"
   KUBERNETES_SERVICE_ACCOUNT_OVERWRITE: documentation
-  KUBERNETES_CPU_REQUEST: 8
+  KUBERNETES_CPU_REQUEST: 24
   KUBERNETES_MEMORY_REQUEST: 32Gi
   KUBERNETES_MEMORY_LIMIT: 32Gi
   # datadog-ci
