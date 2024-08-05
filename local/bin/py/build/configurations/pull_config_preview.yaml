@@ -584,7 +584,7 @@
         - action: workflows
           branch: main
           globs:
-            - "domains/workflow/actionplatform/apps/tools/manifest_generator/manifest.schema.json"
+            # - "domains/workflow/actionplatform/apps/tools/manifest_generator/manifest.schema.json"
             - "domains/workflow/actionplatform/apps/wf-actions-worker/src/runner/bundles/com.datadoghq.*/manifest.json"
           options:
             dest_path: '/service_management/workflows/actions_catalog/'
@@ -593,16 +593,16 @@
               - "com.datadoghq.sample"
               - "com.datadoghq.internal"
 
-      # - repo_name: web-ui
-      #   contents:
-      #     - action: pull-and-push-file
-      #       branch: prod
-      #       globs:
-      #         - "generated/md/external/semantic-color-documentation.md"
-      #       options:
-      #         base_path: ""
-      #         dest_path: "/layouts/shortcodes/"
-      #         file_name: "semantic-color.md"
+      - repo_name: web-ui
+        contents:
+          - action: pull-and-push-file
+            branch: prod
+            globs:
+              - "generated/md/external/semantic-color-documentation.md"
+            options:
+              base_path: ""
+              dest_path: "/layouts/shortcodes/"
+              file_name: "semantic-color.md"
 
       - repo_name: dd-trace-rb
         contents:
