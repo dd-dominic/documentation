@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Check Code Owners Approval
         id: check_approvals
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
@@ -33,13 +33,28 @@ jobs:
               pull_number: number
             });
             
-            // Get code owners
-            const { data: codeowners } = await github.rest.repos.getCodeowners({
-              owner,
-              repo
-            });
+            // Get CODEOWNERS file content
+            let codeowners;
+            try {
+              const { data } = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: 'CODEOWNERS',
+              });
+              codeowners = Buffer.from(data.content, 'base64').toString('utf8');
+            } catch (error) {
+              console.log('CODEOWNERS file not found. Skipping check.');
+              return;
+            }
             
-            if (!codeowners.owners || codeowners.owners.length === 0) {
+            // Parse CODEOWNERS file
+            const codeownersLines = codeowners.split('\n').filter(line => line.trim() && !line.startsWith('#'));
+            const codeownersSet = new Set(codeownersLines.flatMap(line => {
+              const parts = line.split(/\s+/);
+              return parts.slice(1).filter(part => part.startsWith('@'));
+            }));
+            
+            if (codeownersSet.size === 0) {
               console.log('No code owners found. Skipping check.');
               return;
             }
@@ -57,9 +72,9 @@ jobs:
                 .map(review => review.user.login)
             );
             
-            const codeOwnerStatus = codeowners.owners.map(owner => ({
-              owner,
-              approved: approvals.has(owner)
+            const codeOwnerStatus = Array.from(codeownersSet).map(owner => ({
+              owner: owner.substring(1), // Remove '@' from the beginning
+              approved: approvals.has(owner.substring(1))
             }));
             
             const missingApprovals = codeOwnerStatus.filter(status => !status.approved);
@@ -74,7 +89,7 @@ jobs:
 
       - name: Update PR status
         if: failure()
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
@@ -86,7 +101,7 @@ jobs:
               return `${emoji} ${status.owner}`;
             }).join('\n');
             
-            const comment = `This pull request is missing approvals from one or more code owners.\n\nCode Owner Approval Status:\n${statusList}`;
+            const comment = `This pull request is missing approvals from one or more code owners.\n\nCode Owner Status:\n${statusList}`;
             
             await github.rest.pulls.createReview({
               owner,
