@@ -115,7 +115,7 @@ jobs:
             const approvals = new Set(
               reviews
                 .filter(review => review.state === 'APPROVED')
-                .map(review => `@myOrg/${review.user.login}`)
+                .map(review => `@DataDog/${review.user.login}`)
             );
             
             const codeOwnerStatus = Array.from(relevantOwners).map(owner => ({
