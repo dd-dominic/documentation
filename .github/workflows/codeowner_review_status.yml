@@ -1,0 +1,99 @@
+name: Code Owners Approval Check
+
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions: {}
+
+jobs:
+  check-code-owners-approval:
+    runs-on: ubuntu-latest
+    if: github.base_ref == 'master'
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Check Code Owners Approval
+        id: check_approvals
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { owner, repo, number } = context.issue;
+            
+            // Get pull request details
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: number
+            });
+            
+            // Get code owners
+            const { data: codeowners } = await github.rest.repos.getCodeowners({
+              owner,
+              repo
+            });
+            
+            if (!codeowners.owners || codeowners.owners.length === 0) {
+              console.log('No code owners found. Skipping check.');
+              return;
+            }
+            
+            // Get reviews
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner,
+              repo,
+              pull_number: number
+            });
+            
+            const approvals = new Set(
+              reviews
+                .filter(review => review.state === 'APPROVED')
+                .map(review => review.user.login)
+            );
+            
+            const codeOwnerStatus = codeowners.owners.map(owner => ({
+              owner,
+              approved: approvals.has(owner)
+            }));
+            
+            const missingApprovals = codeOwnerStatus.filter(status => !status.approved);
+            
+            if (missingApprovals.length > 0) {
+              core.setFailed(`Missing approvals from code owners: ${missingApprovals.map(status => status.owner).join(', ')}`);
+            } else {
+              console.log('All code owners have approved the pull request.');
+            }
+            
+            core.setOutput('codeOwnerStatus', JSON.stringify(codeOwnerStatus));
+
+      - name: Update PR status
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { owner, repo, number } = context.issue;
+            const codeOwnerStatus = JSON.parse(process.env.CODE_OWNER_STATUS);
+            
+            const statusList = codeOwnerStatus.map(status => {
+              const emoji = status.approved ? '✅' : '❌';
+              return `${emoji} ${status.owner}`;
+            }).join('\n');
+            
+            const comment = `This pull request is missing approvals from one or more code owners.\n\nCode Owner Approval Status:\n${statusList}`;
+            
+            await github.rest.pulls.createReview({
+              owner,
+              repo,
+              pull_number: number,
+              event: 'COMMENT',
+              body: comment
+            });
+        env:
+          CODE_OWNER_STATUS: ${{ steps.check_approvals.outputs.codeOwnerStatus }}
