@@ -51,6 +51,7 @@ jobs:
                 const [pattern, ...owners] = line.split(/\s+/);
                 return { pattern, owners: owners.map(o => o.trim()) };
               });
+            console.log('CODEOWNERS rules:', codeownersRules);
             
             // Function to check if a file matches a pattern
             const matchesPattern = (file, pattern) => {
@@ -63,13 +64,22 @@ jobs:
             
             // Get relevant code owners for the changed files
             const relevantOwners = new Set();
+            const defaultOwner = codeownersRules.find(rule => rule.pattern === '*')?.owners[0];
+            console.log(defaultOwner);
             files.forEach(file => {
+              let fileOwners = new Set();
               codeownersRules.forEach(rule => {
                 if (matchesPattern(file.filename, rule.pattern)) {
-                  rule.owners.forEach(owner => relevantOwners.add(owner));
+                  rule.owners.forEach(owner => fileOwners.add(owner));
                 }
               });
+              // If no specific owners found, use the default owner
+              if (fileOwners.size === 0 && defaultOwner) {
+                fileOwners.add(defaultOwner);
+              }
+              fileOwners.forEach(owner => relevantOwners.add(owner));
             });
+            console.log('Relevant code owners:', relevantOwners);
             
             if (relevantOwners.size === 0) {
               console.log('No relevant code owners found for the changed files. Skipping check.');
@@ -82,7 +92,7 @@ jobs:
             const approvals = new Set(
               reviews
                 .filter(review => review.state === 'APPROVED')
-                .map(review => `@DataDog/${review.user.login}`)
+                .map(review => `@myOrg/${review.user.login}`)
             );
             
             const codeOwnerStatus = Array.from(relevantOwners).map(owner => ({
