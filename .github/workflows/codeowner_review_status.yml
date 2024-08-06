@@ -51,21 +51,39 @@ jobs:
                 const [pattern, ...owners] = line.split(/\s+/);
                 return { pattern, owners: owners.map(o => o.trim()) };
               });
-            console.log('CODEOWNERS rules:', codeownersRules);
             
             // Function to check if a file matches a pattern
             const matchesPattern = (file, pattern) => {
-              const regexPattern = pattern
-                .replace(/\*/g, '.*')
-                .replace(/\?/g, '.')
-                .replace(/\//g, '\\/');
+              // Handle directory patterns
+              if (pattern.endsWith('/')) {
+                return file.startsWith(pattern);
+              }
+
+              // Handle glob patterns
+              let regexPattern = pattern
+                .replace(/\./g, '\\.')
+                .replace(/\*/g, '[^/]*')
+                .replace(/\?/g, '[^/]')
+                .replace(/\//g, '\\/')
+                .replace(/\*\*/g, '.*');
+
+              // For double-star patterns, match any depth
+              if (pattern.includes('**')) {
+                return new RegExp(`^${regexPattern}`).test(file);
+              }
+
+              // For patterns without wildcards, check if the file is in the directory or is the file itself
+              if (!pattern.includes('*') && !pattern.includes('?')) {
+                return file === pattern || file.startsWith(pattern + '/');
+              }
+
+              // For single-star patterns, don't match across directory boundaries
               return new RegExp(`^${regexPattern}$`).test(file);
             };
             
             // Get relevant code owners for the changed files
             const relevantOwners = new Set();
             const defaultOwner = codeownersRules.find(rule => rule.pattern === '*')?.owners[0];
-            console.log(defaultOwner);
             files.forEach(file => {
               let fileOwners = new Set();
               codeownersRules.forEach(rule => {
@@ -79,7 +97,6 @@ jobs:
               }
               fileOwners.forEach(owner => relevantOwners.add(owner));
             });
-            console.log('Relevant code owners:', relevantOwners);
             
             if (relevantOwners.size === 0) {
               console.log('No relevant code owners found for the changed files. Skipping check.');
