@@ -49,7 +49,7 @@ jobs:
               .filter(line => line.trim() && !line.startsWith('#'))
               .map(line => {
                 const [pattern, ...owners] = line.split(/\s+/);
-                return { pattern, owners: owners.map(o => o.replace('@', '')) };
+                return { pattern, owners: owners.map(o => o.trim()) };
               });
             
             // Function to check if a file matches a pattern
@@ -82,7 +82,7 @@ jobs:
             const approvals = new Set(
               reviews
                 .filter(review => review.state === 'APPROVED')
-                .map(review => review.user.login)
+                .map(review => `@DataDog/${review.user.login}`)
             );
             
             const codeOwnerStatus = Array.from(relevantOwners).map(owner => ({
