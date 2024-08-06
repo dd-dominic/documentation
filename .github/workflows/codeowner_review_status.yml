@@ -26,12 +26,9 @@ jobs:
           script: |
             const { owner, repo, number } = context.issue;
             
-            // Get pull request details
-            const { data: pr } = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: number
-            });
+            // Get pull request details and files
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const { data: files } = await github.rest.pulls.listFiles({ owner, repo, pull_number: number });
             
             // Get CODEOWNERS file content
             let codeowners;
@@ -48,23 +45,39 @@ jobs:
             }
             
             // Parse CODEOWNERS file
-            const codeownersLines = codeowners.split('\n').filter(line => line.trim() && !line.startsWith('#'));
-            const codeownersSet = new Set(codeownersLines.flatMap(line => {
-              const parts = line.split(/\s+/);
-              return parts.slice(1).filter(part => part.startsWith('@'));
-            }));
+            const codeownersRules = codeowners.split('\n')
+              .filter(line => line.trim() && !line.startsWith('#'))
+              .map(line => {
+                const [pattern, ...owners] = line.split(/\s+/);
+                return { pattern, owners: owners.map(o => o.replace('@', '')) };
+              });
             
-            if (codeownersSet.size === 0) {
-              console.log('No code owners found. Skipping check.');
+            // Function to check if a file matches a pattern
+            const matchesPattern = (file, pattern) => {
+              const regexPattern = pattern
+                .replace(/\*/g, '.*')
+                .replace(/\?/g, '.')
+                .replace(/\//g, '\\/');
+              return new RegExp(`^${regexPattern}$`).test(file);
+            };
+            
+            // Get relevant code owners for the changed files
+            const relevantOwners = new Set();
+            files.forEach(file => {
+              codeownersRules.forEach(rule => {
+                if (matchesPattern(file.filename, rule.pattern)) {
+                  rule.owners.forEach(owner => relevantOwners.add(owner));
+                }
+              });
+            });
+            
+            if (relevantOwners.size === 0) {
+              console.log('No relevant code owners found for the changed files. Skipping check.');
               return;
             }
             
             // Get reviews
-            const { data: reviews } = await github.rest.pulls.listReviews({
-              owner,
-              repo,
-              pull_number: number
-            });
+            const { data: reviews } = await github.rest.pulls.listReviews({ owner, repo, pull_number: number });
             
             const approvals = new Set(
               reviews
@@ -72,9 +85,9 @@ jobs:
                 .map(review => review.user.login)
             );
             
-            const codeOwnerStatus = Array.from(codeownersSet).map(owner => ({
-              owner: owner.substring(1), // Remove '@' from the beginning
-              approved: approvals.has(owner.substring(1))
+            const codeOwnerStatus = Array.from(relevantOwners).map(owner => ({
+              owner,
+              approved: approvals.has(owner)
             }));
             
             const missingApprovals = codeOwnerStatus.filter(status => !status.approved);
@@ -82,7 +95,7 @@ jobs:
             if (missingApprovals.length > 0) {
               core.setFailed(`Missing approvals from code owners: ${missingApprovals.map(status => status.owner).join(', ')}`);
             } else {
-              console.log('All code owners have approved the pull request.');
+              console.log('All relevant code owners have approved the pull request.');
             }
             
             core.setOutput('codeOwnerStatus', JSON.stringify(codeOwnerStatus));
@@ -101,7 +114,7 @@ jobs:
               return `${emoji} ${status.owner}`;
             }).join('\n');
             
-            const comment = `This pull request is missing approvals from one or more code owners.\n\nCode Owner Status:\n${statusList}`;
+            const comment = `This pull request is missing approvals from one or more relevant code owners.\n\nRelevant Code Owner Status:\n${statusList}`;
             
             await github.rest.pulls.createReview({
               owner,
