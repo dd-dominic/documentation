@@ -58,7 +58,7 @@ jobs:
               if (pattern.endsWith('/')) {
                 return file.startsWith(pattern);
               }
-
+              
               // Handle glob patterns
               let regexPattern = pattern
                 .replace(/\./g, '\\.')
@@ -66,17 +66,17 @@ jobs:
                 .replace(/\?/g, '[^/]')
                 .replace(/\//g, '\\/')
                 .replace(/\*\*/g, '.*');
-
+              
               // For double-star patterns, match any depth
               if (pattern.includes('**')) {
                 return new RegExp(`^${regexPattern}`).test(file);
               }
-
+              
               // For patterns without wildcards, check if the file is in the directory or is the file itself
               if (!pattern.includes('*') && !pattern.includes('?')) {
                 return file === pattern || file.startsWith(pattern + '/');
               }
-
+              
               // For single-star patterns, don't match across directory boundaries
               return new RegExp(`^${regexPattern}$`).test(file);
             };
@@ -86,13 +86,19 @@ jobs:
             const defaultOwner = codeownersRules.find(rule => rule.pattern === '*')?.owners[0];
             files.forEach(file => {
               let fileOwners = new Set();
+              let hasSpecificOwner = false;
               codeownersRules.forEach(rule => {
                 if (matchesPattern(file.filename, rule.pattern)) {
-                  rule.owners.forEach(owner => fileOwners.add(owner));
+                  rule.owners.forEach(owner => {
+                    fileOwners.add(owner);
+                    if (rule.pattern !== '*') {
+                      hasSpecificOwner = true;
+                    }
+                  });
                 }
               });
-              // If no specific owners found, use the default owner
-              if (fileOwners.size === 0 && defaultOwner) {
+              // If no specific owners found or only the default owner was found, use the default owner
+              if (!hasSpecificOwner && defaultOwner) {
                 fileOwners.add(defaultOwner);
               }
               fileOwners.forEach(owner => relevantOwners.add(owner));
