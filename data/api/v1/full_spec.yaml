@@ -16445,8 +16445,8 @@ components:
           type: boolean
         port:
           description: Port to use when performing the test.
-          format: int64
-          type: integer
+          format: string
+          type: string
         proxy:
           $ref: '#/components/schemas/SyntheticsTestRequestProxy'
         query:
